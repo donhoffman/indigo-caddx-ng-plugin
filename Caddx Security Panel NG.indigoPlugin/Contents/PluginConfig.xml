@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<PluginConfig>
+	<Field id="serialPort" type="serialport">
+  </Field>
+    <Field id="serialBaudRate" type="menu" defaultValue="9600"
+         tooltip="NX-8e serial baud range 2,400 - 38,400 (default = 9,600), NX-584 Home Automation Board serial baud range 2,400 - 76,800 (default = 9,600)">
+    <Label>Baud Rate:</Label>
+    <List>
+      <Option value="2400">2,400 bps</Option>
+      <Option value="4800">4,800 bps</Option>
+      <Option value="9600">9,600 bps</Option>
+      <Option value="19200">19,200 bps</Option>
+      <Option value="38400">38,400 bps</Option>
+      <Option value="76800">76,800 bps</Option>
+    </List>
+  </Field>
+  <Field type="checkbox" id="debugMode" defaultValue="no">
+      <Label>Debug mode:</Label>
+  </Field>
+</PluginConfig>
