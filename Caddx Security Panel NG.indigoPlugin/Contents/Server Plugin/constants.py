@@ -1,22 +1,19 @@
-from enum import IntEnum
+from enum import IntEnum, Enum
 from typing import NamedTuple, Set
 from types import MappingProxyType
 
 
-class PluginPrefsKeys(NamedTuple):
-    """Plugin configuration keys."""
-    port: str = "serialPort"
-    baud: str = "serialBaudRate"
-    debug: str = "debugMode"
-    panel_firmware: str = "panelFirmware"
-    transition_message_flags1: str = "transitionMessageFlags1"
-    transition_message_flags2: str = "transitionMessageFlags2"
-    request_command_flags1: str = "requestCommandFlags1"
-    request_command_flags2: str = "requestCommandFlags2"
-    request_command_flags3: str = "requestCommandFlags3"
-    request_command_flags4: str = "requestCommandFlags4"
-
-# General constants that apply to all message types
+class PPK(Enum):
+    PORT = "serialPort"
+    BAUD = "serialBaudRate"
+    DEBUG = "debugMode"
+    PANEL_FIRMWARE = "panelFirmware"
+    TRANSITION_MESSAGE_FLAGS1 = "transitionMessageFlags1"
+    TRANSITION_MESSAGE_FLAGS2 = "transitionMessageFlags2"
+    REQUEST_COMMAND_FLAGS1 = "requestCommandFlags1"
+    REQUEST_COMMAND_FLAGS2 = "requestCommandFlags2"
+    REQUEST_COMMAND_FLAGS3 = "requestCommandFlags3"
+    REQUEST_COMMAND_FLAGS4 = "requestCommandFlags4"
 
 
 class MessageType(IntEnum):

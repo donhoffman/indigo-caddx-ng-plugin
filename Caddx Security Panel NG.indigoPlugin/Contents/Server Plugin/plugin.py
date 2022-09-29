@@ -13,7 +13,8 @@ class Plugin(indigo.PluginBase):
 
     def __init__(self, plugin_id, plugin_display_name, plugin_version, plugin_prefs):
         indigo.PluginBase.__init__(self, plugin_id, plugin_display_name, plugin_version, plugin_prefs)
-        self.debug = plugin_prefs.get("debugMode", False)
+        self.debug = plugin_prefs.get(const.PPK.DEBUG.value, False)
+        self.debug = True
         if self.debug:
             indigo.server.log("Debug logging enabled")
         else:
@@ -39,11 +40,13 @@ class Plugin(indigo.PluginBase):
     def runConcurrentThread(self):
         # Set up to run loop
         self.logger.debug("runConcurrentThread called")
-        if not self.pluginPrefs.get(const.PluginPrefsKeys.port, None):
+        serialUrl = self.getSerialPortUrl(self.pluginPrefs, const.PPK.PORT.value)
+        if not serialUrl:
             self.logger.error(f"{self._plugin_display_name}: No serial port configured.")
             return
-        serialUrl = self.getSerialPortUrl(self.pluginPrefs[const.PluginPrefsKeys.port])
-        self._conn = self.openSerial(self._plugin_display_name, serialUrl, self.pluginPrefs[const.PluginPrefsKeys.baud], writeTimeout=1.0)
+
+        self._conn = self.openSerial(self._plugin_display_name, serialUrl,
+                                     self.pluginPrefs[const.PPK.BAUD.value], writeTimeout=1.0)
         if not self._conn:
             self.logger.error(f"{self._plugin_display_name}: Unable to open serial port at {serialUrl}.")
             return
@@ -77,11 +80,11 @@ class Plugin(indigo.PluginBase):
                 item = self._queue.get_nowait()
                 self._queue.task_done()
             self._queue = None
-            self.logger.debug(f"Serial connection closed on '{self.pluginPrefs[const.PluginPrefsKeys.port]}'")
+            self.logger.debug(f"Serial connection closed on '{self.pluginPrefs[const.PPK.PORT.value]}'")
 
     def validatePrefsConfigUi(self, values_dict):
         errors_dict = indigo.Dict()
-        self.validateSerialPortUI(values_dict, errors_dict, "serialPort")
+        self.validateSerialPortUi(values_dict, errors_dict, "serialPort")
         if "serialBaudRate" not in values_dict:
             errors_dict["serialBaudRate"] = "Missing baud rate. Reconfigure and reload the Caddx plugin."
         if "debugMode" not in values_dict:
@@ -97,7 +100,7 @@ class Plugin(indigo.PluginBase):
             If False, return immediately if no message.
         :return: None if no message received, otherwise the message received.
         """
-        if not wait_for_response and not self._conn.in_waiting():
+        if not wait_for_response and not self._conn.in_waiting:
             return None
 
         start_character = self._conn.read(1)
@@ -130,6 +133,7 @@ class Plugin(indigo.PluginBase):
             self.logger.error("Message data wrong length. Flushing and discarding buffer.")
             self._conn.reset_input_buffer()
             return None
+        self.logger.debug(f"Received message: {message_data.hex()}")
 
         # Check the checksum
         offered_checksum = int.from_bytes(message_data[-2:], byteorder='little')
@@ -155,6 +159,13 @@ class Plugin(indigo.PluginBase):
             sum1 = (sum1 + byte) % 255
             sum2 = (sum2 + sum1) % 255
         return (sum2 << 8) | sum1
+
+    def _process_command_queue(self) -> None:
+        """
+        Process the command queue.
+        :return: None
+        """
+        return
 
     def _process_received_message(self, message: bytearray) -> None:
         """
@@ -185,22 +196,23 @@ class Plugin(indigo.PluginBase):
         :param message: The received message, starting from command byte.
         :return: None.
         """
-        self.pluginPrefs[const.PluginPrefsKeys.panel_firmware] = message[1:6].decode('ascii')
-        self.logger.debug(f"Panel firmware: {self.pluginPrefs[const.PluginPrefsKeys.panel_firmware]}")
+        panel_firmware = message[1:5].decode('ascii')
+        self.pluginPrefs[const.PPK.PANEL_FIRMWARE.value] = panel_firmware
+        self.logger.debug(f"Panel firmware: {panel_firmware}")
 
-        transition_message_flags1 = self.pluginPrefs[const.PluginPrefsKeys.transition_message_flags1] = message[5] & 0xff
-        transition_message_flags2 = self.pluginPrefs[const.PluginPrefsKeys.transition_message_flags2] = message[6] & 0xff
-        request_command_flags1 = self.pluginPrefs[const.PluginPrefsKeys.request_command_flags1] = message[7] & 0xff
-        request_command_flags2 = self.pluginPrefs[const.PluginPrefsKeys.request_command_flags2] = message[8] & 0xff
-        request_command_flags3 = self.pluginPrefs[const.PluginPrefsKeys.request_command_flags3] = message[9] & 0xff
-        request_command_flags4 = self.pluginPrefs[const.PluginPrefsKeys.request_command_flags4] = message[10] & 0xff
+        transition_message_flags1 = self.pluginPrefs[const.PPK.TRANSITION_MESSAGE_FLAGS1.value] = message[5] & 0xff
+        transition_message_flags2 = self.pluginPrefs[const.PPK.TRANSITION_MESSAGE_FLAGS2.value] = message[6] & 0xff
+        request_command_flags1 = self.pluginPrefs[const.PPK.REQUEST_COMMAND_FLAGS1.value] = message[7] & 0xff
+        request_command_flags2 = self.pluginPrefs[const.PPK.REQUEST_COMMAND_FLAGS2.value] = message[8] & 0xff
+        request_command_flags3 = self.pluginPrefs[const.PPK.REQUEST_COMMAND_FLAGS3.value] = message[9] & 0xff
+        request_command_flags4 = self.pluginPrefs[const.PPK.REQUEST_COMMAND_FLAGS4.value] = message[10] & 0xff
 
         # Log enabled transition-based broadcast messages
         self.logger.debug("Transition-based broadcast messages enabled:")
         for message_type in const.TransitionMessageFlags1:
-            self.logger.debug(f"  - {message_type.name}: {bool(transition_message_flags1 & message_type.value())}")
+            self.logger.debug(f"  - {message_type.name}: {bool(transition_message_flags1 & message_type)}")
         for message_type in const.TransitionMessageFlags2:
-            self.logger.debug(f"  - {message_type.name}: {bool(transition_message_flags2 & message_type.value())}")
+            self.logger.debug(f"  - {message_type.name}: {bool(transition_message_flags2 & message_type)}")
 
         # Log enabled command/request messages
         self.logger.debug("Command/request messages enabled:")
@@ -260,6 +272,7 @@ class Plugin(indigo.PluginBase):
         if required_message_disabled:
             self.logger.error("Please enable the required messages in the Caddx panel configuration before starting plugin.")
             raise Exception("Required  messages not enabled in panel config")
+        return
 
     def _send_message(self, message_type: const.MessageType, message_data: bytearray = None) -> None:
         """
@@ -271,8 +284,8 @@ class Plugin(indigo.PluginBase):
         :return: None
         """
         message_length = 1 + len(message_data) if message_data else 1
-        if not message_type not in const.MessageValidLength:
-            self.logger.error(f"Unsupported message type: {message_type}")
+        if message_type not in const.MessageValidLength:
+            self.logger.error(f"Unsupported message type: {message_type:02x}")
             return
         if not message_length == const.MessageValidLength[message_type]:
             self.logger.error(f"Invalid message length for message type {message_type.name}. Expected {const.MessageValidLength[message_type]}, got {message_length}")
@@ -281,7 +294,7 @@ class Plugin(indigo.PluginBase):
         # Build the message
         message = bytearray()
         message.append(message_length & 0xff)
-        message.append(message_type.value())
+        message.append(message_type)
         if message_data:
             message.extend(message_data)
         checksum = self._calculate_fletcher16(message)
@@ -298,9 +311,9 @@ class Plugin(indigo.PluginBase):
                 message_stuffed.append(0x5d)
             else:
                 message_stuffed.append(i)
-        message_stuffed[0:0] = 0x7e
+        message_stuffed[0:0] = b'\x7e'
+        self.logger.debug(f"Sending message: {message_stuffed.hex()}")
         self._conn.write(message_stuffed)
-        self.logger.debug(f"Sent message: {message_stuffed.hex()}")
 
     def _send_message_ack(self) -> None:
         """
